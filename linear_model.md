@@ -247,3 +247,61 @@ manhattan_lm_results_df %>%
 ```
 
 <img src="linear_model_files/figure-gfm/unnamed-chunk-10-2.png" width="90%" />
+
+## logistic regression
+
+``` r
+nyc_airbnb = 
+  nyc_airbnb %>% 
+  mutate(
+    expensive_apt = as.numeric(price > 500)
+  )
+```
+
+fit a logistic regression model
+
+``` r
+logistic_fit = 
+  glm(
+    expensive_apt ~ stars + borough, 
+    data = nyc_airbnb,
+    family = binomial())
+
+logistic_fit %>% 
+  broom::tidy() %>% 
+  mutate(
+    term = str_replace(term, "borough", "Borough: "),
+    estimate = exp(estimate)
+  ) %>% 
+  select(term, OR = estimate, p.value)
+```
+
+    ## # A tibble: 5 x 3
+    ##   term                     OR    p.value
+    ##   <chr>                 <dbl>      <dbl>
+    ## 1 (Intercept)        7.52e-10 0.908     
+    ## 2 stars              2.15e+ 0 0.00000292
+    ## 3 Borough: Brooklyn  2.49e+ 5 0.945     
+    ## 4 Borough: Manhattan 8.11e+ 5 0.940     
+    ## 5 Borough: Queens    1.15e+ 5 0.949
+
+``` r
+nyc_airbnb %>% 
+  modelr::add_predictions(logistic_fit) %>% 
+  mutate(prob = boot::inv.logit(pred))
+```
+
+    ## # A tibble: 40,492 x 8
+    ##    price stars borough neighbourhood room_type       expensive_apt  pred     prob
+    ##    <dbl> <dbl> <chr>   <chr>         <chr>                   <dbl> <dbl>    <dbl>
+    ##  1    99   5   Bronx   City Island   Private room                0 -17.2  3.43e-8
+    ##  2   200  NA   Bronx   City Island   Private room                0  NA   NA      
+    ##  3   300  NA   Bronx   City Island   Entire home/apt             0  NA   NA      
+    ##  4   125   5   Bronx   City Island   Entire home/apt             0 -17.2  3.43e-8
+    ##  5    69   5   Bronx   City Island   Private room                0 -17.2  3.43e-8
+    ##  6   125   5   Bronx   City Island   Entire home/apt             0 -17.2  3.43e-8
+    ##  7    85   5   Bronx   City Island   Entire home/apt             0 -17.2  3.43e-8
+    ##  8    39   4.5 Bronx   Allerton      Private room                0 -17.6  2.34e-8
+    ##  9    95   5   Bronx   Allerton      Entire home/apt             0 -17.2  3.43e-8
+    ## 10   125   4.5 Bronx   Allerton      Entire home/apt             0 -17.6  2.34e-8
+    ## # ... with 40,482 more rows

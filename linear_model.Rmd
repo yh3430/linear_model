@@ -145,7 +145,38 @@ manhattan_lm_results_df %>%
 ```
 
 
+## logistic regression
 
+```{r}
+nyc_airbnb = 
+  nyc_airbnb %>% 
+  mutate(
+    expensive_apt = as.numeric(price > 500)
+  )
+```
+
+fit a logistic regression model
+
+```{r}
+logistic_fit = 
+  glm(
+    expensive_apt ~ stars + borough, 
+    data = nyc_airbnb,
+    family = binomial())
+
+logistic_fit %>% 
+  broom::tidy() %>% 
+  mutate(
+    term = str_replace(term, "borough", "Borough: "),
+    estimate = exp(estimate)
+  ) %>% 
+  select(term, OR = estimate, p.value)
+
+
+nyc_airbnb %>% 
+  modelr::add_predictions(logistic_fit) %>% 
+  mutate(prob = boot::inv.logit(pred))
+```
 
 
 
