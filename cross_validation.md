@@ -191,3 +191,94 @@ cv_df %>%
 <img src="cross_validation_files/figure-gfm/unnamed-chunk-10-1.png" width="90%" />
 
 ## Child growth data
+
+import data
+
+``` r
+child_growth_df = 
+  read_csv("nepalese_children.csv") %>% 
+  mutate(
+    weight_cp = (weight > 7) * (weight - 7)
+  )
+```
+
+    ## Rows: 2705 Columns: 5
+
+    ## -- Column specification --------------------------------------------------------
+    ## Delimiter: ","
+    ## dbl (5): age, sex, weight, height, armc
+
+    ## 
+    ## i Use `spec()` to retrieve the full column specification for this data.
+    ## i Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+child_growth_df %>% 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .2)
+```
+
+<img src="cross_validation_files/figure-gfm/unnamed-chunk-12-1.png" width="90%" />
+
+Consider candidate models
+
+``` r
+linear_mod = lm(armc ~ weight, data = child_growth_df)
+pwl_mod  = lm(armc ~ weight + weight_cp, data = child_growth_df)
+smooth_mod = gam(armc ~ s(weight), data = child_growth_df)
+```
+
+``` r
+child_growth_df %>% 
+  add_predictions(pwl_mod) %>% 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .2) + 
+  geom_line(aes(y = pred), color = "red")
+```
+
+<img src="cross_validation_files/figure-gfm/unnamed-chunk-14-1.png" width="90%" />
+
+Let’s use CV to compare model
+
+``` r
+cv_df_child = 
+  crossv_mc(child_growth_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+fit models and extract RMSE
+
+``` r
+cv_df_child =
+  cv_df_child %>% 
+  mutate(
+    linear_mod = map(.x = train, ~lm(armc ~ weight, data = .x)),
+    pwl_mod  = map(.x = train, ~lm(armc ~ weight + weight_cp, data = .x)),
+    smooth_mod = map(.x = train, ~gam(armc ~ s(weight), data = .x)), 
+  ) %>% 
+  mutate(
+    rmse_linear = map2_dbl(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_pwl  = map2_dbl(.x = pwl_mod,    .y = test, ~rmse(model = .x, data = .y)),
+    rmse_smooth = map2_dbl(.x = smooth_mod, .y = test, ~rmse(model = .x, data = .y)),
+  )
+```
+
+Let’s look at RMSE distribution
+
+``` r
+cv_df_child %>% 
+  select(.id, starts_with("rmse")) %>% 
+  pivot_longer(
+    rmse_linear:rmse_smooth,
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_boxplot()
+```
+
+<img src="cross_validation_files/figure-gfm/unnamed-chunk-17-1.png" width="90%" />
