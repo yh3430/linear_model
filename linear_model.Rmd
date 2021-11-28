@@ -95,7 +95,7 @@ fit = lm(price ~ stars * borough + room_type * borough, data = nyc_airbnb)
 broom::tidy(fit)
 ```
 
-nesting
+nesting - inside 'map' use '.x', and outside 'map' use just'.'
 
 ```{r}
 nyc_airbnb %>% 
