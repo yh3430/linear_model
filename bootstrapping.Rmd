@@ -5,3 +5,207 @@ date: "11/27/2021"
 output: github_document
 ---
 
+```{r}
+library(tidyverse)
+library(viridis)
+library(modelr)
+library(p8105.datasets)
+library(patchwork)
+
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+```
+
+## simulate a dataset
+
+```{r}
+set.seed(1)
+
+n_samp = 250
+sim_df_const = 
+  tibble(
+    x = rnorm(n_samp, 1, 1),
+    error = rnorm(n_samp, 0, 1),
+    y = 2 + 3 * x + error
+  )
+sim_df_nonconst = sim_df_const %>% 
+  mutate(
+  error = error * .75 * x,
+  y = 2 + 3 * x + error
+)
+```
+
+make a plot
+
+```{r}
+sim_df_nonconst %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point()
+```
+
+
+```{r}
+sim_df_nonconst %>% 
+  lm(y ~ x, data = .) %>% 
+  broom::tidy()
+```
+
+## Let's try to use the bootstrap for inference
+
+```{r}
+bootstrap_sample = 
+  sim_df_nonconst %>% 
+  sample_frac(size = 1, replace = TRUE) %>% 
+  arrange(x)
+
+lm(y ~ x, data = bootstrap_sample)
+```
+
+write a function
+
+```{r}
+boot_sample = function(df){
+  sample_frac(df, size = 1, replace = TRUE)
+  
+}
+```
+
+Now, we will make a tibble to keep track of everything
+
+```{r}
+boot_strap_df = 
+  tibble(
+    strap_number = 1:1000,
+    strap_sample = rerun(1000, boot_sample(sim_df_const))
+  )
+```
+
+
+From here, things are kind of the same as "always" - iterate 'map'
+
+```{r}
+bootstrap_results =
+  boot_strap_df %>% 
+  mutate(
+    models = map(.x = strap_sample, ~lm(y ~ x, data = .x)),
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(strap_number, results) %>% 
+  unnest(results)
+
+
+bootstrap_results %>% 
+  ggplot(aes(x = estimate)) + 
+  geom_histogram() + 
+  facet_grid(~term, scales = "free")
+
+lm(y ~ x, data = sim_df_nonconst) %>% 
+  broom::tidy()
+
+bootstrap_results %>% 
+  group_by(term) %>% 
+  summarize(
+    se = sd(estimate)
+  )
+```
+
+## use 'modelr'
+
+```{r}
+sim_df_nonconst %>% 
+  bootstrap(n = 1000, id = "strap_number") %>% 
+    mutate(
+    models = map(.x = strap, ~lm(y ~ x, data = .x)),
+    results = map(models, broom::tidy)
+  )
+```
+
+## Airbnb example
+
+```{r}
+data("nyc_airbnb")
+
+
+nyc_airbnb =
+  nyc_airbnb %>% 
+  mutate(stars = review_scores_location / 2) %>% 
+  rename(
+    borough = neighbourhood_group
+  ) %>% 
+  filter(borough != "Staten Island") %>% 
+  select(price, stars, borough, room_type)
+```
+
+
+```{r}
+nyc_airbnb %>% 
+  ggplot(aes(x = stars, y = price)) + 
+  geom_point()
+```
+
+
+
+```{r}
+airbnb_bootstrap_results = 
+  nyc_airbnb %>% 
+  filter(borough == "Manhattan") %>% 
+  bootstrap(n = 1000, id = "strap_number") %>% 
+    mutate(
+    models = map(.x = strap, ~lm(price ~ stars, data = .x)),
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(strap_number, results) %>% 
+  unnest(results)
+```
+
+
+
+```{r}
+ggp_star_est = 
+  airbnb_bootstrap_results %>% 
+  filter(term == "stars") %>% 
+  ggplot(aes(estimate)) + 
+  geom_density()
+
+ggp_scatter = 
+  nyc_airbnb %>% 
+  filter(borough == "Manhattan") %>% 
+  ggplot(aes(x = stars, y = price)) + 
+  geom_point()
+
+ggp_star_est + ggp_scatter 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
